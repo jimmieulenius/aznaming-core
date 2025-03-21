@@ -1,0 +1,111 @@
+name: CD
+
+on:
+  push:
+    branches:
+      - main
+      - dev/*
+      - feature/*
+      - hotfix/*
+
+env:
+  TARGET_PATH: './src/ClassLibrary2'
+  PREFIX: 'ClassLibrary'
+  RUNTIME: 'linux-x64, osx-x64, win-x64'
+
+jobs:
+  init:
+    runs-on: ubuntu-latest
+
+    outputs:
+      allow_prerelease: ${{ steps.set_values.outputs.allow_prerelease }}
+
+    steps:
+      - name: Set values
+        id: set_values
+        run: |
+          echo "allow_prerelease=${{ github.ref != 'refs/heads/main' }}" >> $GITHUB_OUTPUT
+
+  build:
+    needs: init
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Add NuGet source
+        shell: pwsh
+        run: |
+          dotnet nuget add source `
+            --username ${{ github.repository_owner }} `
+            --password ${{ secrets.GITHUB_TOKEN }} `
+            --store-password-in-clear-text `
+            --name github `
+            "https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json"
+
+      - name: Build
+        shell: pwsh
+        run: |
+          Import-Module './scripts/CICD.DotNet.psm1'
+
+          Build-Package `
+            -Path '${{ env.TARGET_PATH }}' `
+            -AllowPrerelease:$${{ needs.init.outputs.allow_prerelease }} `
+            -ProjectAssetFilter '${{ env.PREFIX }}*'
+
+  semantic_release:
+    name: Semantic Release
+    needs: build
+    uses: ./.github/workflows/.semantic-release.yaml
+    secrets: inherit
+
+  publish:
+    if: needs.semantic_release.outputs.new_release_published == 'true'
+    needs:
+      - init
+      - semantic_release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Add NuGet source
+        shell: pwsh
+        run: |
+          dotnet nuget add source `
+            --username ${{ github.repository_owner }} `
+            --password ${{ secrets.GITHUB_TOKEN }} `
+            --store-password-in-clear-text `
+            --name github `
+            "https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json"
+      
+      - name: Publish
+        env:
+          NUGET_API_KEY: ${{ secrets.GITHUB_TOKEN }}
+        shell: pwsh
+        run: |
+          Import-Module './scripts/CICD.DotNet.psm1'
+
+          Build-Package `
+            -Path '${{ env.TARGET_PATH }}' `
+            -Version ${{ needs.semantic_release.outputs.new_release_version }} `
+            -AllowPrerelease:$${{ needs.init.outputs.allow_prerelease }} `
+            -ProjectAssetFilter '${{ env.PREFIX }}*' `
+            -Publish `
+            -Runtime ${{ env.RUNTIME }} `
+            -NuGetUri 'https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json' `
+            -PublishAction {
+              $archivePath = "$PublishOutput.zip"
+
+              Compress-Archive `
+                -Path $PublishOutput `
+                -DestinationPath $archivePath `
+                -Force
+
+              gh release upload 'v${{ needs.semantic_release.outputs.new_release_version }}' $archivePath
+            }
+
+          

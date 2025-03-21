@@ -1,0 +1,32 @@
+{
+    "$schema": "https://raw.githubusercontent.com/jimmieulenius/aznaming/refs/heads/main/schemas/config/sections.json",
+    "sections": [
+        {
+            "uri": ".\\config\\aliases.json",
+            "path": "$.aliases"
+        },
+        {
+            "uri": ".\\config\\templates.json",
+            "path": "$.templates"
+        },
+        {
+            "uri": ".\\config\\templateComponentKey.json"
+        },
+        {
+            "uri": ".\\config\\components\\core.json",
+            "path": "$.components"
+        },
+        {
+            "uri": ".\\config\\components\\location.json",
+            "path": "$.components"
+        },
+        {
+            "uri": ".\\config\\components\\resourceType.json",
+            "path": "$.components"
+        },
+        {
+            "uri": ".\\config\\restApis.json",
+            "path": "$.restApis"
+        }
+    ]
+}
