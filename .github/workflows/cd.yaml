@@ -92,7 +92,7 @@ jobs:
 
           Build-Package `
             -Path '${{ env.TARGET_PATH }}' `
-            -Version ${{ needs.semantic_release.outputs.new_release_version }} `
+            -Version '${{ needs.semantic_release.outputs.new_release_version }}' `
             -AllowPrerelease:$${{ needs.init.outputs.allow_prerelease }} `
             -ProjectAssetFilter '${{ env.PREFIX }}*' `
             -Publish `

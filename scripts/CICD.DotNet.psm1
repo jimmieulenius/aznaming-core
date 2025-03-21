@@ -231,7 +231,7 @@ function Build-Package {
             dotnet pack $arguments
 
             dotnet nuget push `
-                "./bin/$Configuration/$(
+                "$Path/bin/$Configuration/$(
                     Split-Path `
                         -Path $Path `
                         -LeafBase
@@ -243,21 +243,23 @@ function Build-Package {
                 --source $NuGetUri `
                 --api-key $NuGetApiKey
 
-            $Runtime `
-            | ForEach-Object {
-                Set-Variable `
-                    -Name 'PublishOutput' `
-                    -Value $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath("./bin/$Configuration/publish/$_") `
-                    -Scope 'Global' `
-                    -Force
+            if ($Runtime) {
+                $Runtime `
+                | ForEach-Object {
+                    Set-Variable `
+                        -Name 'PublishOutput' `
+                        -Value $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath("./bin/$Configuration/publish/$_") `
+                        -Scope 'Global' `
+                        -Force
 
-                dotnet publish `
-                    --runtime $_ `
-                    --configuration $Configuration `
-                    --output $PublishOutput
+                    dotnet publish `
+                        --runtime $_ `
+                        --configuration $Configuration `
+                        --output $PublishOutput
 
-                if ($PublishAction) {
-                    & $PublishAction
+                    if ($PublishAction) {
+                        & $PublishAction
+                    }
                 }
             }
         }
