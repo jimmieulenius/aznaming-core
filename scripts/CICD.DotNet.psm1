@@ -234,7 +234,7 @@ function Build-Package {
                 "$Path/bin/$Configuration/$(
                     Split-Path `
                         -Path $Path `
-                        -LeafBase
+                        -Leaf
                 )$(
                     (-not [String]::IsNullOrEmpty($Version)) `
                         ? ".$Version" `
