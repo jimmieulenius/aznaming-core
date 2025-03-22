@@ -3,7 +3,7 @@ using AzNaming.Core.Models;
 
 namespace AzNaming.Core.Services;
 
-public class InvokeService(params string[] configUri)
+public class NamingInvokeService(params string[] configUri)
 {
     private string[] _configUri = configUri;
 
