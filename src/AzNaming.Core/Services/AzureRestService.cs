@@ -12,18 +12,12 @@ public class AzureRestService : IDisposable
 
     private readonly Lazy<HttpClient> _httpClient = new(() =>
     {
-        var environmentVariableName = new
-        {
-            AzureFederatedToken = "AZURE_FEDERATED_TOKEN",
-            AzureFederatedTokenFile = "AZURE_FEDERATED_TOKEN_FILE"
-        };
-        var azureUri = new
-        {
-            Management = "https://management.azure.com/"
-        };
-
         var httpClient = new HttpClient();
-        var federatedToken = Environment.GetEnvironmentVariable(environmentVariableName.AzureFederatedToken);
+        var token = Environment.GetEnvironmentVariable("AZURE_ACCESS_TOKEN");
+
+        if (string.IsNullOrEmpty(token))
+        {
+            var federatedToken = Environment.GetEnvironmentVariable("AZURE_FEDERATED_TOKEN");
 
             if (!string.IsNullOrEmpty(federatedToken))
             {
@@ -31,13 +25,14 @@ public class AzureRestService : IDisposable
                 using var file = new FileStream(path, FileMode.Create);
                 File.WriteAllText(path, federatedToken);
 
-                Environment.SetEnvironmentVariable(environmentVariableName.AzureFederatedTokenFile, path);
+                Environment.SetEnvironmentVariable("AZURE_FEDERATED_TOKEN_FILE", path);
             }
 
-            httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-            httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
-                "Bearer",
-                new DefaultAzureCredential().GetToken(new TokenRequestContext([$"{azureUri.Management}/.default"])).Token);
+            token = new DefaultAzureCredential().GetToken(new TokenRequestContext(["https://management.azure.com/.default"])).Token;
+        }
+
+        httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+        httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
         return httpClient;
     });
