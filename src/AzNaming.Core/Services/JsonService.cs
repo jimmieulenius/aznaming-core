@@ -640,7 +640,7 @@ public partial class JsonService(FileService fileService)
 
         if (pathItems.Length > 1)
         {
-            result = result!.Nest([.. pathItems.Skip(1)]);
+            result = result.Nest([.. pathItems.Skip(1)]);
         }
 
         return result!;

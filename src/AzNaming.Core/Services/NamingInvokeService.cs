@@ -108,10 +108,7 @@ public class NamingInvokeService(params string[] configUri)
         {
             var namingService = new NamingService(new JsonService(fileService), azureRestService, _configUri);
 
-            if (options is null)
-            {
-                options = new NamingInvokeOptions();
-            }
+            options ??= new NamingInvokeOptions();
 
             if (options.ClearConfig)
             {
