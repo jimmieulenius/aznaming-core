@@ -197,9 +197,11 @@ public partial class JsonService(FileService fileService)
             {
                 var nodePath = refPathsVisited is not null ? node.GetPath() : path ?? originPath;
 
-                AddNodeToCache(node, propertyName, nodePath, sectionId, refPathsVisited);
+                // AddNodeToCache(node, propertyName, nodePath, sectionId, refPathsVisited);
 
                 node = ResolveNode(OverrideProperties(node!, objectOverride, refPathsVisited), refPathsVisited);
+
+                AddNodeToCache(node, propertyName, nodePath, sectionId, refPathsVisited);
 
                 return node;
             }
