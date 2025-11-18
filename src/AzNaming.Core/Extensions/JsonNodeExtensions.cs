@@ -18,6 +18,7 @@ public static partial class JsonNodeExtensions
         public const string Wildcard = "*";
         public const string Root = "$";
         public const string Union = ",";
+        public const string Slice = ":";
     }
 
     private abstract class JsonPathSegment
@@ -73,13 +74,16 @@ public static partial class JsonNodeExtensions
         public JsonPathChildSelector[] Selectors { get; private set; } = selectors;
     }
 
-    public struct JsonNodeSelectable(JsonNode? node, bool suppressException = true)
+    // public struct JsonNodeSelectable(JsonNode? node, bool suppressException = true)
+    public struct JsonNodeSelectable(JsonNode? node)
     {
-        public static readonly JsonNodeSelectable Default = new(null, true);
+        // public static readonly JsonNodeSelectable Default = new(null, true);
+        public static readonly JsonNodeSelectable Default = new(null);
 
-        private bool _suppressException = suppressException;
+        // private readonly bool _suppressException = suppressException;
 
-        public JsonNode? Node { get; private set; } = node ?? (suppressException ? node : throw new ArgumentNullException(nameof(node)));
+        // public JsonNode? Node { get; private set; } = node ?? (suppressException ? node : throw new ArgumentNullException(nameof(node)));
+        public JsonNode? Node { get; private set; } = node;
 
         public readonly bool Exist { get { return Node is not null; } }
 
@@ -87,44 +91,49 @@ public static partial class JsonNodeExtensions
         {
             get
             {
-                if (_suppressException)
-                {
+                // if (_suppressException)
+                // {
                     if (Node is null)
                     {
                         return Default;
                     }
-                }
+                // }
 
-                if (!_suppressException || Node!.GetValueKind() == JsonValueKind.Array)
+                // if (!_suppressException || Node!.GetValueKind() == JsonValueKind.Array)
+                if (Node!.GetValueKind() == JsonValueKind.Array)
                 {
                     var arrayNode = Node!.AsArray();
+                    var result = arrayNode.SelectNodes($"$.[{index}]");
 
-                    if (index < 0)
-                    {
-                        index = arrayNode.Count + index;
-                    }
+                    // return new JsonNodeSelectable(result.SingleOrDefault(), _suppressException);
+                    return new JsonNodeSelectable(result.SingleOrDefault());
 
-                    if (_suppressException)
-                    {
-                        if (index < 0 || index >= arrayNode.Count)
-                        {
-                            return Default;
-                        }
-                    }
+                    // if (index < 0)
+                    // {
+                    //     index = arrayNode.Count + index;
+                    // }
 
-                    var result = arrayNode[index];
+                    // if (_suppressException)
+                    // {
+                    //     if (index < 0 || index >= arrayNode.Count)
+                    //     {
+                    //         return Default;
+                    //     }
+                    // }
 
-                    if (_suppressException)
-                    {
-                        if (result is null)
-                        {
-                            return Default;
-                        }
-                    }
+                    // var result = arrayNode[index];
 
-                    return new JsonNodeSelectable(result!, _suppressException);
+                    // if (_suppressException)
+                    // {
+                    //     if (result is null)
+                    //     {
+                    //         return Default;
+                    //     }
+                    // }
+
+                    // return new JsonNodeSelectable(result!, _suppressException);
                 }
-                
+
                 return Default;
             }
         }
@@ -133,39 +142,41 @@ public static partial class JsonNodeExtensions
         {
             get
             {
-                if (_suppressException)
-                {
+                // if (_suppressException)
+                // {
                     if (Node is null)
                     {
                         return Default;
                     }
-                }
+                // }
 
-                if (!_suppressException || Node!.GetValueKind() == JsonValueKind.Object)
+                // if (!_suppressException || Node!.GetValueKind() == JsonValueKind.Object)
+                if (Node!.GetValueKind() == JsonValueKind.Object)
                 {
                     var objectNode = Node!.AsObject();
 
-                    if (_suppressException)
+                    // if (_suppressException)
+                    // {
+                    if (!objectNode.ContainsKey(member))
                     {
-                        if (!objectNode.ContainsKey(member))
-                        {
-                            return Default;
-                        }
+                        return Default;
                     }
+                    // }
 
                     var result = objectNode[member];
 
-                    if (_suppressException)
+                    // if (_suppressException)
+                    // {
+                    if (result is null)
                     {
-                        if (result is null)
-                        {
-                            return Default;
-                        }
+                        return Default;
                     }
+                    // }
 
-                    return new JsonNodeSelectable(result!, _suppressException);
+                    // return new JsonNodeSelectable(result!, _suppressException);
+                    return new JsonNodeSelectable(result!);
                 }
-                
+
                 return Default;
             }
         }
@@ -235,7 +246,7 @@ public static partial class JsonNodeExtensions
     public static JsonObject Nest(this JsonNode node, params string[] path)
     {
         ArgumentNullException.ThrowIfNull(node, nameof(node));
-        
+
         if (path.Length == 0)
         {
             throw new ArgumentException("Path cannot be empty", nameof(path));
@@ -289,9 +300,9 @@ public static partial class JsonNodeExtensions
                 {
                     return new JsonPathWildcardChildSelector();
                 }
-                else if (value.Contains(':'))
+                else if (value.Contains(JsonPathConstants.Slice))
                 {
-                    var parts = value.Split(":");
+                    var parts = value.Split(JsonPathConstants.Slice);
                     int? start = null;
                     int? end = null;
                     int? step = null;
@@ -317,6 +328,15 @@ public static partial class JsonNodeExtensions
 
                     return new JsonPathArraySliceChildSelector(start, end, step);
                 }
+                else if (value.Contains(JsonPathConstants.Union))
+                {
+                    var selectors = value.Split(
+                        JsonPathConstants.Union,
+                        StringSplitOptions.RemoveEmptyEntries
+                    ).Select(item => GetChildSelector(item)).ToArray();
+
+                    return new JsonPathUnionChildSelector(selectors);
+                }
 
                 return new JsonPathMemberNameChildSelector(value);
             }
@@ -331,6 +351,8 @@ public static partial class JsonNodeExtensions
                         return new JsonPathChildSegment<JsonPathArrayIndexChildSelector>(arrayIndexSelector);
                     case JsonPathArraySliceChildSelector arraySliceSelector:
                         return new JsonPathChildSegment<JsonPathArraySliceChildSelector>(arraySliceSelector);
+                    case JsonPathUnionChildSelector unionSelector:
+                        return new JsonPathChildSegment<JsonPathUnionChildSelector>(unionSelector);
                     default:
                         return new JsonPathChildSegment<JsonPathMemberNameChildSelector>((JsonPathMemberNameChildSelector)selector);
                 }
@@ -343,12 +365,12 @@ public static partial class JsonNodeExtensions
             {
                 return false;
             }
-            
+
             if (path.StartsWith(JsonPathConstants.Root))
             {
                 path = path[1..];
             }
-            
+
             if (path.StartsWith(JsonPathConstants.Descendants))
             {
                 path = path[2..];
@@ -356,7 +378,7 @@ public static partial class JsonNodeExtensions
 
                 return true;
             }
-            
+
             if (path.StartsWith(JsonPathConstants.ChildDot))
             {
                 path = path[1..];
@@ -369,7 +391,7 @@ public static partial class JsonNodeExtensions
 
                 return true;
             }
-            
+
             if (path.StartsWith(JsonPathConstants.ChildBracket))
             {
                 var match = regex.ChildBracket.Match(path);
@@ -379,7 +401,7 @@ public static partial class JsonNodeExtensions
                     path = path[(match.Index + match.Length)..];
                     var matchValue = match.Groups[1].Value;
                     stringValue = matchValue;
-                    
+
                     if (stringValue == JsonPathConstants.Wildcard)
                     {
                         segment = new JsonPathChildSegment<JsonPathWildcardChildSelector>(new JsonPathWildcardChildSelector());
@@ -395,7 +417,7 @@ public static partial class JsonNodeExtensions
                         })
                         {
                             var matches = regexItem.Matches(stringValue);
-                            selectorMatches.AddRange(matches.Where(item => !string.IsNullOrEmpty(item.Groups[1].Value)).ToArray());
+                            selectorMatches.AddRange([.. matches.Where(item => !string.IsNullOrEmpty(item.Groups[1].Value))]);
                         }
 
                         if (selectorMatches.Count > 0)
@@ -410,17 +432,33 @@ public static partial class JsonNodeExtensions
 
                             var matchValueParts = matchValue.Split(JsonPathConstants.Union, StringSplitOptions.RemoveEmptyEntries);
 
-                            if (matchValueParts.Length > 0) {
-                                foreach (var matchValuePartsItem in matchValueParts)
+                            if (matchValueParts.Length > 0 || matchValue == JsonPathConstants.Union)
+                            {
+                                if (matchValueParts.Length > 0)
                                 {
-                                    selectors.Add(stringValue.IndexOf(matchValuePartsItem), GetChildSelector(matchValuePartsItem));
+                                    foreach (var matchValuePartsItem in matchValueParts)
+                                    {
+                                        selectors.Add(stringValue.IndexOf(matchValuePartsItem), GetChildSelector(matchValuePartsItem));
+                                    }
                                 }
 
                                 segment = new JsonPathChildSegment<JsonPathUnionChildSelector>(new JsonPathUnionChildSelector([.. selectors.OrderBy(item => item.Key).Select(item => item.Value).ToArray()]));
                             }
                             else
                             {
-                                segment = new JsonPathChildSegment<JsonPathMemberNameChildSelector>((JsonPathMemberNameChildSelector)selectors.First().Value);
+                                var selector = selectors.First().Value;
+
+                                if (selector is JsonPathMemberNameChildSelector memberNameSelector)
+                                {
+                                    if (memberNameSelector.MemberName == JsonPathConstants.Wildcard)
+                                    {
+                                        segment = new JsonPathChildSegment<JsonPathWildcardChildSelector>(new JsonPathWildcardChildSelector());
+                                    }
+                                    else
+                                    {
+                                        segment = new JsonPathChildSegment<JsonPathMemberNameChildSelector>(memberNameSelector);
+                                    }
+                                }
                             }
                         }
                         else
@@ -441,7 +479,12 @@ public static partial class JsonNodeExtensions
                     return true;
                 }
             }
-            
+
+            if (string.IsNullOrEmpty(path) || path.Length == 0)
+            {
+                return false;
+            }
+
             stringValue = path.Split(
                 [
                     JsonPathConstants.ChildDot,
@@ -463,14 +506,14 @@ public static partial class JsonNodeExtensions
 
         bool ValidateResultItem(JsonNode? node, out JsonValueKind valueKind, int? index = null)
         {
-           void SetNullItem()
+            void SetNullItem()
             {
                 if (index.HasValue)
                 {
                     result[index.Value] = null;
                 }
             }
-           
+
             valueKind = JsonValueKind.Undefined;
 
             if (node is null)
@@ -569,6 +612,7 @@ public static partial class JsonNodeExtensions
                     if (start < 0)
                     {
                         start = arrayNode.Count + start;
+                        end += 1;
                     }
 
                     if (end < 0)
@@ -616,7 +660,7 @@ public static partial class JsonNodeExtensions
                 buffer.Add(member!);
                 shouldProceed = true;
             }
-            
+
             result[index] = null;
         }
 
@@ -651,13 +695,13 @@ public static partial class JsonNodeExtensions
                             SelectWildcard(resultItem!, valueKind, resultIndex);
                             break;
                         case JsonPathChildSegment<JsonPathArrayIndexChildSelector> arrayIndexSegment:
-                            SelectArrayItem(arrayIndexSegment.Selector, resultItem!, valueKind, resultIndex);    
+                            SelectArrayItem(arrayIndexSegment.Selector, resultItem!, valueKind, resultIndex);
                             continue;
                         case JsonPathChildSegment<JsonPathArraySliceChildSelector> arraySliceSegment:
                             SelectArraySlice(arraySliceSegment.Selector, resultItem!, valueKind, resultIndex);
                             continue;
                         case JsonPathChildSegment<JsonPathMemberNameChildSelector> memberNameSegment:
-                            SelectMember(memberNameSegment.Selector, resultItem!, valueKind, resultIndex); 
+                            SelectMember(memberNameSegment.Selector, resultItem!, valueKind, resultIndex);
                             continue;
                         case JsonPathChildSegment<JsonPathUnionChildSelector> unionSegment:
                             foreach (var selectorItem in unionSegment.Selector.Selectors)
@@ -694,7 +738,7 @@ public static partial class JsonNodeExtensions
                 result.AddRange(buffer);
             }
 
-            result = [..GetResult()];
+            result = [.. GetResult()];
         }
 
         return GetResult();
@@ -702,7 +746,49 @@ public static partial class JsonNodeExtensions
 
     public static JsonNodeSelectable ToSelectable(this JsonNode node, bool suppressException = true)
     {
-        return new JsonNodeSelectable(node, suppressException);
+        // return new JsonNodeSelectable(node, suppressException);
+        return new JsonNodeSelectable(node);
+    }
+
+    public static JsonNodeSelectable[] Slice(this JsonNodeSelectable selectable, int? start = null, int? end = null, int? step = null)
+    {
+        if (selectable.Node is null)
+        {
+            return [];
+        }
+
+        if (selectable.Node!.GetValueKind() == JsonValueKind.Array)
+        {
+            var arrayNode = selectable.Node!.AsArray();
+
+            start ??= 0;
+            end ??= arrayNode.Count;
+            step ??= 1;
+
+            var result = arrayNode.SelectNodes($"$.[{start}:{end}:{step}]");
+
+            return [.. result.Select(item => new JsonNodeSelectable(item))];
+        }
+
+        return [];
+    }
+
+    public static JsonNodeSelectable[] Union(this JsonNodeSelectable selectable, params int[] indicies)
+    {
+        if (selectable.Node is null)
+        {
+            return [];
+        }
+
+        if (selectable.Node!.GetValueKind() == JsonValueKind.Array)
+        {
+            var arrayNode = selectable.Node!.AsArray();
+            var result = arrayNode.SelectNodes($"$.[{string.Join(",", indicies)}]");
+
+            return [.. result.Select(item => new JsonNodeSelectable(item))];
+        }
+
+        return [];
     }
 
     #endregion Methods

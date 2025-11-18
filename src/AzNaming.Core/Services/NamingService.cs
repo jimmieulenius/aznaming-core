@@ -1255,6 +1255,7 @@ public partial class NamingService
                 var propertiesPropertyName = "properties";
                 var propertiesNode = objectNode[propertiesPropertyName]!.AsObject();
                 var defaultNode = new Lazy<JsonObject?>(() => TryGetTemplateNode("default", out var node, out _) ? node!.AsObject()[propertiesPropertyName]!.AsObject() : null);
+
                 var optionalProperties = new string[]
                 {
                     nameof(TemplateConfig.Values)
@@ -1323,7 +1324,7 @@ public partial class NamingService
         var propertyName = new
         {
             ApiVersion = "apiVersion",
-            CheckName = "checkName",
+            CheckName = "checkNameAvailability",
             Exist = "exist",
             Uri = "uri",
             Body = "body",
